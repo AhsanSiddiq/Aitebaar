@@ -177,6 +177,8 @@ export async function getBorrower(lenderId: string, id: string, now = new Date()
       notesFlags: true,
       newsItems: { orderBy: { date: "desc" } },
       exchangeEvents: { orderBy: { date: "desc" } },
+      listingLinks: { orderBy: { requestedAt: "desc" }, include: { psx: true } },
+      psxSymbol: true,
     },
   });
   const lender = await prisma.lender.findUniqueOrThrow({ where: { id: lenderId } });
@@ -186,6 +188,7 @@ export async function getBorrower(lenderId: string, id: string, now = new Date()
     borrower: full,
     composite: compositeRiskScore(signalsFor(b), now),
     r1: concentration("BORROWER", b.id, b.name, row.exposure, lender.equity),
+    psx: full.ticker && full.listed ? await getPsxView(full.ticker) : null,
   };
 }
 
@@ -195,4 +198,27 @@ export async function getAlerts(lenderId: string) {
     include: { borrower: { select: { id: true, name: true } } },
     orderBy: [{ createdAt: "desc" }],
   });
+}
+
+/** Market view for a listed borrower: latest company snapshot + recent closes. */
+export async function getPsxView(symbol: string) {
+  const [snapshot, prices, lastRun] = await Promise.all([
+    prisma.psxCompanySnapshot.findFirst({ where: { symbol }, orderBy: { fetchedAt: "desc" } }),
+    prisma.psxPrice.findMany({ where: { symbol }, orderBy: { date: "desc" }, take: 30 }),
+    prisma.psxSyncRun.findFirst({ where: { symbol, kind: "COMPANY" }, orderBy: { startedAt: "desc" } }),
+  ]);
+  const data = snapshot ? (JSON.parse(snapshot.data) as import("@/lib/integrations/psx/types").PsxCompanyData) : null;
+  const last = prices[0];
+  const monthAgo = prices[prices.length - 1];
+  return {
+    fetchedAt: snapshot?.fetchedAt ?? null,
+    source: snapshot?.source ?? null,
+    lastRun,
+    profile: data?.profile ?? null,
+    annual: data?.financials.annual ?? {},
+    lastClose: last?.close ?? null,
+    lastDate: last?.date ?? null,
+    change30d: last && monthAgo && monthAgo.close ? last.close / monthAgo.close - 1 : null,
+    closes: prices.map((p) => p.close).reverse(),
+  };
 }

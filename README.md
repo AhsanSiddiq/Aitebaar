@@ -41,6 +41,15 @@ Other scripts: `npm test` (finance unit tests), `npm run lint` (type-check), `np
 | 7 | Credit proposal (CAM memo, versioned, PDF) | seeded drafts in DB |
 | 8 | Concentration + polish, reference-data admin | R-1 widget + reset demo done |
 
+## PSX connectivity
+
+- `npm run psx:sync -- --symbols` loads every PSX symbol into the database (fuzzy search works off this table).
+- `npm run psx:sync -- --linked` refreshes company data, prices and announcements for approved listed borrowers; `--all` walks every company; `--probe LUCK` prints raw portal output without writing.
+- Set `PSX_DATA_SOURCE=dps` for the live PSX data portal; the default `seed` stays offline on fictional demo symbols. The same sync is in **Admin → PSX data**.
+- API (signed-in users): `GET /api/psx/search?q=`, `GET /api/psx/symbols/{SYMBOL}`; Admin: `POST /api/psx/sync {kind: "symbols"|"company"|"linked", symbol?}`.
+- Adding a borrower runs fuzzy matching against PSX; a match becomes a pending listing link that an Analyst/CRO approves under **Approvals**. Approved listed borrowers take financials from PSX, so no statements are requested.
+- PSX market data is PSX's property: get a data licence (PSX or a licensed redistributor) before commercial use.
+
 ## Layout
 
 ```

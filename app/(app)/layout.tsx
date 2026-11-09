@@ -9,7 +9,10 @@ import { SignOutButton } from "@/components/sign-out-button";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const openAlerts = await prisma.alert.count({ where: { lenderId: user.lenderId, status: "OPEN" } });
+  const [openAlerts, pendingApprovals] = await Promise.all([
+    prisma.alert.count({ where: { lenderId: user.lenderId, status: "OPEN" } }),
+    prisma.listingLink.count({ where: { lenderId: user.lenderId, status: "PENDING" } }),
+  ]);
   const isAdmin = user.role === "ADMIN";
 
   return (
@@ -19,7 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Wordmark />
         </Link>
         <div className="mt-8">
-          <AppNav variant="side" isAdmin={isAdmin} openAlerts={openAlerts} />
+          <AppNav variant="side" isAdmin={isAdmin} openAlerts={openAlerts} pendingApprovals={pendingApprovals} />
         </div>
         <div className="mt-auto rounded-lg bg-white/5 px-3 py-3 text-xs text-white/60">
           <div className="font-medium text-white/85">{user.lenderName}</div>
@@ -43,7 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </div>
           </div>
           <div className="border-t border-line px-2 py-1.5 lg:hidden">
-            <AppNav variant="top" isAdmin={isAdmin} openAlerts={openAlerts} />
+            <AppNav variant="top" isAdmin={isAdmin} openAlerts={openAlerts} pendingApprovals={pendingApprovals} />
           </div>
         </header>
         <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">{children}</main>

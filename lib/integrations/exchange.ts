@@ -27,15 +27,4 @@ export interface ExchangeFeedAdapter {
   fetchAnnouncements(symbol: string, since: Date): Promise<ExchangeAnnouncement[]>;
 }
 
-/** v0 adapter: serves a fixed set of illustrative announcements keyed by symbol. */
-export class SeedPsxAdapter implements ExchangeFeedAdapter {
-  readonly exchange = "PSX" as const;
-  readonly source = "SEED";
-  constructor(private readonly fixtures: ExchangeAnnouncement[]) {}
-
-  async fetchAnnouncements(symbol: string, since: Date): Promise<ExchangeAnnouncement[]> {
-    return this.fixtures.filter((a) => a.symbol === symbol && a.date >= since);
-  }
-}
-
-// TODO(later): class LicensedPsxAdapter implements ExchangeFeedAdapter — API client for the licensed feed.
+// Implementations: lib/integrations/psx (DpsPsxClient for the PSX data portal, SeedPsxSource offline).

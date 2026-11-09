@@ -5,7 +5,8 @@ import { orrGrade } from "@/config/grades";
 import { computeRatios, sectorBenchmark, trend } from "@/lib/finance/ratios";
 import { computeFrr } from "@/lib/finance/scorecard";
 import { computeEcl, ead as computeEad } from "@/lib/finance/ecl";
-import { SeedPsxAdapter, type ExchangeAnnouncement } from "@/lib/integrations/exchange";
+import { SeedPsxSource } from "@/lib/integrations/psx/seed-source";
+import { syncCompany, syncSymbols } from "@/lib/psx/sync";
 import { ALERTS, BORROWERS, DEMO_LENDER_ID, DEMO_PASSWORD, LENDER, PERIODS, USERS, buildSpread } from "@/prisma/seed-data";
 
 const DAY = 86_400_000;
@@ -45,22 +46,13 @@ export async function seedDemo(prisma: PrismaClient, now = new Date()) {
     groupIds.set(name, g.id);
   }
 
-  // PSX announcements are ingested through the adapter seam, exactly as a licensed feed would be.
-  const fixtures: ExchangeAnnouncement[] = BORROWERS.flatMap((b) =>
-    (b.psx ?? []).map((e, i) => ({
-      externalId: `${b.ticker}-${i}`,
-      symbol: b.ticker!,
-      type: e.type,
-      date: daysAgo(e.daysAgo),
-      title: e.title,
-      description: e.description,
-      sentiment: e.sentiment,
-      riskImpact: e.riskImpact,
-    })),
-  );
-  const psx = new SeedPsxAdapter(fixtures);
+  // PSX: load the (fictional) symbol table through the same sync path a live
+  // PSX sync uses, so borrowers can reference their ticker.
+  const psx = new SeedPsxSource(now);
+  await syncSymbols(prisma, psx, "seed");
 
   const borrowerIds = new Map<string, string>();
+  const listedTickers: string[] = [];
 
   for (const b of BORROWERS) {
     const borrower = await prisma.borrower.create({
@@ -72,6 +64,7 @@ export async function seedDemo(prisma: PrismaClient, now = new Date()) {
         sector: b.sector,
         listed: b.listed,
         ticker: b.ticker,
+        financialsSource: b.listed ? "PSX" : "UPLOAD",
         ownership: b.ownership,
         description: b.description,
         watchList: b.watchList ?? false,
@@ -249,21 +242,14 @@ export async function seedDemo(prisma: PrismaClient, now = new Date()) {
       })),
     });
     if (b.listed && b.ticker) {
-      const anns = await psx.fetchAnnouncements(b.ticker, daysAgo(365));
-      await prisma.exchangeEvent.createMany({
-        data: anns.map((a) => ({
-          borrowerId: borrower.id,
-          exchange: psx.exchange,
-          type: a.type,
-          date: a.date,
-          title: a.title,
-          description: a.description,
-          sentiment: a.sentiment,
-          riskImpact: a.riskImpact,
-          source: psx.source,
-          externalId: a.externalId,
-        })),
+      // Approved listing link (maker-checker), then PSX data through the normal sync.
+      await prisma.listingLink.create({
+        data: {
+          lenderId: lender.id, borrowerId: borrower.id, symbol: b.ticker, matchScore: 0.98, matchType: "EXACT_NAME", status: "APPROVED",
+          requestedBy: rm.name, requestedAt: monthsAgo(14), decidedBy: analyst.name, decidedAt: monthsAgo(14), decisionNote: "Name and sector match PSX listing.",
+        },
       });
+      listedTickers.push(b.ticker);
     }
 
     // --- Credit proposal (partially filled) + profile.
@@ -289,6 +275,9 @@ export async function seedDemo(prisma: PrismaClient, now = new Date()) {
       });
     }
   }
+
+  // Announcements, prices and company snapshots for listed borrowers (HIGH-impact announcements raise alerts here).
+  for (const t of listedTickers) await syncCompany(prisma, psx, t, "seed", now);
 
   await prisma.alert.createMany({
     data: ALERTS.map((a) => ({

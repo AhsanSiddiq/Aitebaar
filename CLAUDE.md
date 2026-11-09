@@ -5,7 +5,10 @@
 **How to use this file:** This is `CLAUDE.md` at the repo root (Claude Code reads it automatically as persistent context). Build in the order in §16 — the v0 prototype scope comes first. When something is ambiguous, prefer the simplest thing that makes a pilot feel real to a lender, and leave a `// TODO`. This is an idea-stage product, incubated at NIC, being built for pilots with real lenders. It must look and behave like a real product, but it runs on realistic seed data and user uploads, not live licensed feeds.
 
 > **Project decisions (recorded during build)**
-> - Exchange for listed borrowers is **PSX** (Pakistan Stock Exchange). PSX events are seeded for v0 and sit behind an adapter interface (`lib/integrations/exchange.ts`) so a licensed feed can replace the seed later without UI changes.
+> - Exchange for listed borrowers is **PSX** (Pakistan Stock Exchange).
+> - **PSX connectivity (owner decision, overrides the "seed only" line in §17 for PSX):** Aitebaar connects to the PSX data portal (`dps.psx.com.pk`) through `lib/integrations/psx` (`PsxMarketDataSource`: `DpsPsxClient` live, `SeedPsxSource` offline; `PSX_DATA_SOURCE=dps|seed`). It loads the full PSX symbol list into `PsxSymbol`, plus company pages (profile, financial highlights, announcements, payouts) and EOD prices. A licensed feed can replace the portal behind the same interface. PSX data needs a licence for commercial use; confirm before paid pilots.
+> - **Listed borrowers are not asked for financial statements:** once a PSX listing is approved, `financialsSource = PSX` and financials + announcements come from PSX. Full statements are extracted from the results PDFs linked in PSX announcements (build step 3).
+> - **Borrower ↔ ticker matching is maker-checker:** fuzzy name/ticker search (`lib/psx/fuzzy.ts`) proposes a match; an Analyst or CRO (never the proposer) approves it in Approvals before the borrower counts as listed.
 > - Build status: see `README.md` → "Build progress".
 
 ## 1. One-paragraph description

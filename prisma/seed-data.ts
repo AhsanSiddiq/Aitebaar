@@ -724,7 +724,6 @@ export interface SeedAlert {
 
 export const ALERTS: SeedAlert[] = [
   { borrower: "ravi", type: "HIGH_IMPACT_NEWS", severity: "HIGH", title: "TFC profit payment missed — default notice", message: "Trustee served an event-of-default notice on Ravi Textiles' listed TFC. Check cross-default clauses on our RF and TF.", daysAgo: 3 },
-  { borrower: "ravi", type: "EXCHANGE_EVENT", severity: "HIGH", title: "PSX: non-payment of TFC profit", message: "Company disclosed non-payment to PSX. Event classified as DEFAULT, high impact.", daysAgo: 3 },
   { borrower: "ravi", type: "STAGE_MIGRATION", severity: "HIGH", title: "Stage 2 → Stage 3 (credit-impaired)", message: "Both facilities 95 DPD. ECL now lifetime with two-track test against R-8 Substandard provision.", daysAgo: 2 },
   { borrower: "ravi", type: "RATING_DOWNGRADE", severity: "HIGH", title: "ORR 7 → 8 (Substandard)", message: "Model grade 8 approved. Classification moves to Substandard under R-8.", daysAgo: 1 },
   { borrower: "zenith", type: "HIGH_IMPACT_NEWS", severity: "MEDIUM", title: "Circular debt at new high", message: "Power-sector arrears rising; Zenith receivable days already above 300.", daysAgo: 6 },
@@ -734,4 +733,25 @@ export const ALERTS: SeedAlert[] = [
   { borrower: "indus", type: "EXPOSURE_LIMIT", severity: "MEDIUM", title: "Indus Group near R-1 group limit", message: "Group exposure is above 80% of the R-1 group limit (50% of equity). Single-borrower exposure to Indus Fertilizer is also above 90% of its limit.", daysAgo: 1 },
   { borrower: "sutlej", type: "RATING_DOWNGRADE", severity: "MEDIUM", title: "ORR 5 → 7 (override)", message: "Analyst override for related-party receivables from Ravi Textiles. Restructured under R-9.", daysAgo: 120, status: "RESOLVED" },
   { borrower: "chenab", type: "HIGH_IMPACT_NEWS", severity: "LOW", title: "Winter gas curtailment", message: "30% gas curtailment expected to reduce H1 FY26 production.", daysAgo: 20, status: "ACKNOWLEDGED" },
+];
+
+/**
+ * Fictional PSX symbols for offline demos (PSX_DATA_SOURCE=seed). The five
+ * listed demo borrowers plus look-alike names so fuzzy search has something to
+ * disambiguate. A live sync adds the real PSX list alongside these.
+ */
+export const DEMO_PSX_SYMBOLS = [
+  { symbol: "SMTC", name: "Summit Cement Limited", sectorName: "CEMENT" },
+  { symbol: "IFZL", name: "Indus Fertilizer Limited", sectorName: "FERTILIZER" },
+  { symbol: "CHNC", name: "Chenab Chemicals Limited", sectorName: "CHEMICAL" },
+  { symbol: "ZNTH", name: "Zenith Power Limited", sectorName: "POWER GENERATION & DISTRIBUTION" },
+  { symbol: "RVTX", name: "Ravi Textiles Limited", sectorName: "TEXTILE COMPOSITE" },
+  { symbol: "SMTX", name: "Summit Textile Mills Limited", sectorName: "TEXTILE SPINNING" },
+  { symbol: "INPC", name: "Indus Petrochemicals Limited", sectorName: "CHEMICAL" },
+  { symbol: "CHGL", name: "Chenab Glass Limited", sectorName: "GLASS & CERAMICS" },
+  { symbol: "RVSP", name: "Ravi Spinning Mills Limited", sectorName: "TEXTILE SPINNING" },
+  { symbol: "MGPM", name: "Margalla Paper Mills Limited", sectorName: "PAPER, BOARD & PACKAGING" },
+  { symbol: "ZNTX", name: "Zenith Textile Mills Limited", sectorName: "TEXTILE COMPOSITE" },
+  { symbol: "KRKS", name: "Karakoram Steel Limited", sectorName: "ENGINEERING" },
+  { symbol: "STSG", name: "Sutlej Sugar Mills Limited", sectorName: "SUGAR & ALLIED INDUSTRIES" },
 ];

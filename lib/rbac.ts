@@ -15,6 +15,11 @@ export const PERMISSIONS = {
   "admin.referenceData": ["ADMIN"],
   "admin.users": ["ADMIN"],
   "admin.resetDemo": ["ADMIN"],
+  "admin.psxSync": ["ADMIN"],
+  "borrower.create": ["RM", "ANALYST"],
+  /** Maker-checker: RM/Analyst propose a PSX listing match; Analyst/CRO approve (never their own). */
+  "listing.propose": ["RM", "ANALYST"],
+  "listing.approve": ["ANALYST", "CRO"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

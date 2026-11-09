@@ -8,6 +8,9 @@ import { ConcentrationWidget } from "@/components/concentration-widget";
 import { AlertItem } from "@/components/alert-item";
 import { pct, pkrCompact, pkrMn } from "@/lib/format";
 import { orrGrade } from "@/config/grades";
+import { can } from "@/lib/rbac";
+import { buttonVariants } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +30,14 @@ export default async function DashboardPage() {
             {lender.name} · {kpis.borrowerCount} borrowers · as of {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
-        <BookMix byStatus={kpis.byStatus} total={kpis.totalExposure} />
+        <div className="flex flex-wrap items-end gap-4">
+          <BookMix byStatus={kpis.byStatus} total={kpis.totalExposure} />
+          {can(user.role, "borrower.create") && (
+            <Link href="/borrowers/new" className={buttonVariants({ size: "sm" })}>
+              <Plus className="size-4" /> Add borrower
+            </Link>
+          )}
+        </div>
       </div>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-label="Key indicators">

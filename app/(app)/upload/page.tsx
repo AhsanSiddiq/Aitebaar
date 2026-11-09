@@ -6,7 +6,7 @@ export default function UploadPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Upload financials</h1>
-        <p className="mt-1 text-sm text-ink-50">Upload a PDF or Excel statement, review the AI extraction, then save it into the spreading template.</p>
+        <p className="mt-1 text-sm text-ink-50">Upload a PDF or Excel statement, review the AI extraction, then save it into the spreading template. Borrowers with an approved PSX listing don&apos;t need uploads: their financials come from PSX.</p>
       </div>
       <Card>
         <CardContent className="flex flex-col items-center gap-3 py-14 text-center">

@@ -12,6 +12,8 @@ import { FACILITY_TYPE_LABELS, SECTOR_LABELS, type FacilityType, type SbpClass, 
 import { orrGrade, FRR_DESCRIPTIONS } from "@/config/grades";
 import { dateShort, pct, pkrMn } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PsxListingCard } from "@/components/psx-listing-card";
+import { can } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -30,11 +32,12 @@ export default async function BorrowerPage({ params }: { params: Promise<{ id: s
   const user = await requireUser();
   const data = await getBorrower(user.lenderId, id);
   if (!data) notFound();
-  const { row, borrower: b, composite, r1 } = data;
+  const { row, borrower: b, composite, r1, psx } = data;
+  const pendingLink = b.listingLinks.find((l) => l.status === "PENDING");
   const rating = b.ratings[0];
   const signals = [
     ...b.newsItems.map((n) => ({ kind: "News", id: n.id, date: n.date, title: n.headline, source: n.source, sentiment: n.sentiment, impact: n.impact as Severity })),
-    ...b.exchangeEvents.map((e) => ({ kind: `PSX · ${e.type.replace("_", " ").toLowerCase()}`, id: e.id, date: e.date, title: e.title, source: "PSX (seeded)", sentiment: e.sentiment, impact: e.riskImpact as Severity })),
+    ...b.exchangeEvents.map((e) => ({ kind: `PSX · ${e.type.replace("_", " ").toLowerCase()}`, id: e.id, date: e.date, title: e.title, source: e.source === "SEED" ? "PSX (demo)" : "PSX", sentiment: e.sentiment, impact: e.riskImpact as Severity })),
   ].sort((x, y) => y.date.getTime() - x.date.getTime());
   const openFlags = b.notesFlags.filter((f) => f.status !== "DISMISSED");
 
@@ -97,7 +100,7 @@ export default async function BorrowerPage({ params }: { params: Promise<{ id: s
         />
       </section>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="min-w-0 space-y-6">
           <Card>
             <CardHeader>
@@ -192,7 +195,17 @@ export default async function BorrowerPage({ params }: { params: Promise<{ id: s
           </Card>
         </div>
 
-        <div className="min-w-0 space-y-6">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-6 md:grid-cols-2 2xl:grid-cols-1">
+          <PsxListingCard
+            borrowerId={b.id}
+            borrowerName={b.name}
+            listed={b.listed}
+            symbol={b.psxSymbol}
+            financialsSource={b.financialsSource}
+            pending={pendingLink ? { symbol: pendingLink.symbol, name: pendingLink.psx.name, score: pendingLink.matchScore, requestedBy: pendingLink.requestedBy, requestedAt: pendingLink.requestedAt } : null}
+            view={psx}
+            canPropose={can(user.role, "listing.propose")}
+          />
           <Card>
             <CardHeader><CardTitle>Borrower</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">

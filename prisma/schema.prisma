@@ -61,8 +61,11 @@ model Borrower {
   name        String
   sector      String
   listed      Boolean  @default(false)
-  /// PSX symbol for listed borrowers (fictional in demo data).
+  /// PSX symbol for listed borrowers (fictional in demo data). Set only via an approved ListingLink.
   ticker      String?
+  psxSymbol   PsxSymbol? @relation(fields: [ticker], references: [symbol])
+  /// Where financials come from: PSX for approved listed borrowers (no FS request to the client), else UPLOAD/MANUAL.
+  financialsSource String @default("UPLOAD") // PSX | UPLOAD | MANUAL
   ownership   String?
   description String?
   /// Watch-list flag (SICR trigger, §4.5).
@@ -80,6 +83,7 @@ model Borrower {
   proposals      CreditProposal[]
   profileScores  ProfileScore[]
   alerts         Alert[]
+  listingLinks   ListingLink[]
 
   @@index([lenderId])
 }
@@ -353,4 +357,89 @@ model AuditLog {
   timestamp DateTime @default(now())
 
   @@index([lenderId, timestamp])
+}
+
+// ---------------------------------------------------------------------------
+// PSX market data (shared reference data, not tenant-owned).
+// Populated by lib/psx/sync.ts from the PSX data portal (or seed for offline demos).
+
+model PsxSymbol {
+  symbol         String   @id
+  name           String
+  /// Normalised name for fuzzy matching (lib/psx/fuzzy.ts).
+  normalizedName String
+  sectorName     String?
+  isEtf          Boolean  @default(false)
+  isDebt         Boolean  @default(false)
+  /// DPS | SEED
+  source         String   @default("DPS")
+  active         Boolean  @default(true)
+  syncedAt       DateTime @default(now())
+
+  borrowers Borrower[]
+  prices    PsxPrice[]
+  snapshots PsxCompanySnapshot[]
+  links     ListingLink[]
+
+  @@index([normalizedName])
+}
+
+model PsxPrice {
+  symbol String
+  psx    PsxSymbol @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+  date   DateTime
+  close  Float
+  volume Float?
+  open   Float?
+
+  @@id([symbol, date])
+}
+
+/// Company page as fetched: profile, financial highlights (annual + quarterly), ratios, payouts.
+model PsxCompanySnapshot {
+  id          String    @id @default(cuid())
+  symbol      String
+  psx         PsxSymbol @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+  fetchedAt   DateTime  @default(now())
+  /// JSON: { profile, financials: { annual, quarterly }, ratios, announcements, payouts }
+  data        String
+  source      String    @default("DPS")
+
+  @@index([symbol, fetchedAt])
+}
+
+model PsxSyncRun {
+  id         String    @id @default(cuid())
+  kind       String // SYMBOLS | COMPANY | PRICES | ALL
+  symbol     String?
+  status     String // RUNNING | OK | FAILED
+  message    String?
+  counts     String? // JSON
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  actor      String?
+}
+
+/// Maker-checker link between a borrower and a PSX symbol. An RM proposes
+/// (from fuzzy search), an Analyst or CRO approves. Only an APPROVED link
+/// makes a borrower "listed" and switches its financials source to PSX.
+model ListingLink {
+  id           String    @id @default(cuid())
+  lenderId     String
+  borrowerId   String
+  borrower     Borrower  @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  symbol       String
+  psx          PsxSymbol @relation(fields: [symbol], references: [symbol])
+  matchScore   Float
+  matchType    String
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  requestedBy  String
+  /// User id of the maker; the checker must be a different user.
+  requestedById String?
+  requestedAt  DateTime  @default(now())
+  decidedBy    String?
+  decidedAt    DateTime?
+  decisionNote String?
+
+  @@index([lenderId, status])
 }
