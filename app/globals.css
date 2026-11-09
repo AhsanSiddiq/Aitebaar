@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+/* Aitebaar brand tokens (§14). Light mode first. */
+@theme {
+  --color-emerald: #046a38;
+  --color-emerald-deep: #013d2b;
+  --color-emerald-50: #e8f3ed;
+  --color-ink: #0b1f3a;
+  --color-ink-70: #3c4d66;
+  --color-ink-50: #6b7a90;
+  --color-gold: #c9a227;
+  --color-mint: #17b890;
+  --color-paper: #f7f6f1;
+  --color-line: #e3e1d8;
+  --color-surface: #ffffff;
+
+  --color-risk-clear: #15803d;
+  --color-risk-clear-bg: #e7f5ec;
+  --color-risk-watch: #e0a800;
+  --color-risk-watch-ink: #8a6700;
+  --color-risk-watch-bg: #fdf5dc;
+  --color-risk-alert: #c0392b;
+  --color-risk-alert-bg: #fbe9e7;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+/* Tabular figures for all numbers. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
