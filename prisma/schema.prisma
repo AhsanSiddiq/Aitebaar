@@ -1,0 +1,445 @@
+// Aitebaar data model (§8).
+// SQLite for the prototype; written to port to Postgres by changing `provider`.
+// Enum-like fields are Strings validated against lib/domain.ts; JSON payloads are
+// stored as String (TODO: switch to Json when moving to Postgres).
+// Money is PKR millions unless stated. Every tenant-owned row carries lenderId
+// directly or through its borrower, and every query filters by it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Lender {
+  id            String   @id @default(cuid())
+  name          String
+  institutionType String // DFI | NBFC | MFB | LEASING | COMMERCIAL_BANK
+  /// Equity / capital used as the base for SBP R-1 exposure limits (PKR mn).
+  equity        Float
+  createdAt     DateTime @default(now())
+
+  users     User[]
+  groups    Group[]
+  borrowers Borrower[]
+  alerts    Alert[]
+  auditLogs AuditLog[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  lenderId     String
+  lender       Lender   @relation(fields: [lenderId], references: [id], onDelete: Cascade)
+  email        String   @unique
+  name         String
+  role         String // RM | ANALYST | CRO | ADMIN
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  ownedBorrowers Borrower[] @relation("BorrowerOwner")
+}
+
+model Group {
+  id        String     @id @default(cuid())
+  lenderId  String
+  lender    Lender     @relation(fields: [lenderId], references: [id], onDelete: Cascade)
+  name      String
+  borrowers Borrower[]
+}
+
+model Borrower {
+  id          String   @id @default(cuid())
+  lenderId    String
+  lender      Lender   @relation(fields: [lenderId], references: [id], onDelete: Cascade)
+  groupId     String?
+  group       Group?   @relation(fields: [groupId], references: [id])
+  ownerId     String?
+  owner       User?    @relation("BorrowerOwner", fields: [ownerId], references: [id])
+  name        String
+  sector      String
+  listed      Boolean  @default(false)
+  /// PSX symbol for listed borrowers (fictional in demo data). Set only via an approved ListingLink.
+  ticker      String?
+  psxSymbol   PsxSymbol? @relation(fields: [ticker], references: [symbol])
+  /// Where financials come from: PSX for approved listed borrowers (no FS request to the client), else UPLOAD/MANUAL.
+  financialsSource String @default("UPLOAD") // PSX | UPLOAD | MANUAL
+  ownership   String?
+  description String?
+  /// Watch-list flag (SICR trigger, §4.5).
+  watchList   Boolean  @default(false)
+  nextReviewDate DateTime?
+  createdAt   DateTime @default(now())
+
+  facilities     Facility[]
+  statements     FinancialStatement[]
+  ratioResults   RatioResult[]
+  notesFlags     NotesFlag[]
+  newsItems      NewsItem[]
+  exchangeEvents ExchangeEvent[]
+  ratings        Rating[]
+  proposals      CreditProposal[]
+  profileScores  ProfileScore[]
+  alerts         Alert[]
+  listingLinks   ListingLink[]
+
+  @@index([lenderId])
+}
+
+model Facility {
+  id           String   @id @default(cuid())
+  borrowerId   String
+  borrower     Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  type         String // RUNNING_FINANCE | TERM_FINANCE | LETTER_OF_CREDIT | GUARANTEE | LEASE
+  /// true for funded facilities; LCs/guarantees are non-funded.
+  funded       Boolean  @default(true)
+  sanctioned   Float
+  outstanding  Float
+  currency     String   @default("PKR")
+  pricing      String // e.g. "3M KIBOR + 2.25%"
+  /// Effective interest rate, used to discount ECL.
+  eir          Float
+  sanctionDate DateTime
+  maturityDate DateTime
+  seniority    String // SENIOR_SECURED | SENIOR_UNSECURED | SUBORDINATED
+  dpd          Int      @default(0)
+  /// R-9: restructured/rescheduled. Separate from classification on purpose.
+  restructured Boolean  @default(false)
+  classification String // SBP R-8 band
+  /// Subjective (non-DPD) classification reason, if any.
+  classificationReason String?
+  purpose      String?
+  covenants    String? // JSON array of { text, status }
+
+  collateral Collateral[]
+  ratings    FacilityRating[]
+  eclResults EclResult[]
+}
+
+model Collateral {
+  id          String   @id @default(cuid())
+  facilityId  String
+  facility    Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  type        String
+  description String?
+  marketValue Float
+  /// Forced Sale Value.
+  fsv         Float
+  chargeType  String
+  valuationDate DateTime?
+}
+
+model FinancialStatement {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  /// Fiscal period label, e.g. "FY2025" (Pakistan FY ends 30 June).
+  period     String
+  periodEnd  DateTime
+  type       String // ANNUAL_AUDITED | ANNUAL_UNAUDITED | INTERIM
+  source     String // MANUAL | UPLOAD | FEED | SEED
+  status     String // DRAFT | REVIEWED | APPROVED
+  auditor    String?
+  /// Raw notes-to-the-accounts text (input to Notes Intelligence).
+  notesText  String?
+  createdAt  DateTime @default(now())
+
+  lineItems  FinancialLineItem[]
+  notesFlags NotesFlag[]
+
+  @@unique([borrowerId, period, type])
+}
+
+model FinancialLineItem {
+  id          String             @id @default(cuid())
+  statementId String
+  statement   FinancialStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  /// Standardised spreading key (config/spreading.ts).
+  key         String
+  value       Float
+
+  @@unique([statementId, key])
+}
+
+model RatioResult {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  period     String
+  ratioKey   String
+  value      Float?
+  priorValue Float?
+  benchmark  Float?
+  trend      String? // UP | DOWN | FLAT
+  computedAt DateTime @default(now())
+
+  @@unique([borrowerId, period, ratioKey])
+}
+
+model NotesFlag {
+  id            String   @id @default(cuid())
+  borrowerId    String
+  borrower      Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  statementId   String?
+  statement     FinancialStatement? @relation(fields: [statementId], references: [id], onDelete: SetNull)
+  category      String
+  severity      String // LOW | MEDIUM | HIGH
+  /// Exact quote from the notes — required for every flag.
+  sourceSnippet String
+  explanation   String
+  status        String   @default("OPEN") // OPEN | ACCEPTED | DISMISSED
+  reviewNote    String?
+  reviewedBy    String?
+  /// AI provenance for audit (§10).
+  origin        String   @default("SEED") // SEED | AI | MANUAL
+  model         String?
+  promptVersion String?
+  createdAt     DateTime @default(now())
+}
+
+model NewsItem {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  source     String
+  headline   String
+  summary    String?
+  url        String?
+  date       DateTime
+  sentiment  String // POSITIVE | NEUTRAL | NEGATIVE
+  impact     String // LOW | MEDIUM | HIGH
+  riskSignal String?
+  origin     String   @default("SEED")
+}
+
+model ExchangeEvent {
+  id          String   @id @default(cuid())
+  borrowerId  String
+  borrower    Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  exchange    String   @default("PSX")
+  type        String // DIVIDEND | BOARD_CHANGE | MANAGEMENT_CHANGE | DEFAULT | PENALTY | MATERIAL_INFO | RESULTS
+  date        DateTime
+  title       String
+  description String
+  sentiment   String
+  riskImpact  String // LOW | MEDIUM | HIGH
+  /// Which adapter produced it (seed now; licensed feed later).
+  source      String   @default("SEED")
+  externalId  String?
+}
+
+model Rating {
+  id                String   @id @default(cuid())
+  borrowerId        String
+  borrower          Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  version           Int
+  /// Final ORR grade (1–9) after any override.
+  orrGrade          Int
+  modelGrade        Int
+  finalGrade        Int
+  score             Float // 0–100
+  quantScore        Float
+  qualScore         Float
+  sbpClassification String
+  /// JSON breakdown of scorecard components ("why this grade").
+  components        String?
+  rationale         String?
+  overrideReason    String?
+  status            String   @default("APPROVED") // DRAFT | PENDING_APPROVAL | APPROVED
+  preparedBy        String?
+  approvedBy        String?
+  effectiveDate     DateTime
+  createdAt         DateTime @default(now())
+
+  @@unique([borrowerId, version])
+}
+
+model FacilityRating {
+  id               String   @id @default(cuid())
+  facilityId       String
+  facility         Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  frrGrade         String // A–F
+  securityCoverage Float
+  lgd              Float
+  rationale        String?
+  effectiveDate    DateTime
+}
+
+model EclResult {
+  id                String   @id @default(cuid())
+  facilityId        String
+  facility          Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  stage             Int
+  /// Stage at origination, to evidence SICR.
+  originationStage  Int      @default(1)
+  stageReason       String?
+  pd                Float
+  lgd               Float
+  ead               Float
+  /// JSON array of per-scenario { key, label, weight, pd, ecl }.
+  scenarioBreakdown String
+  ifrs9Ecl          Float
+  prProvision       Float?
+  finalEcl          Float
+  asOf              DateTime
+}
+
+model CreditProposal {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  version    Int
+  /// JSON object of CAM sections.
+  content    String
+  status     String   @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | DECLINED
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  approvals ProposalApproval[]
+
+  @@unique([borrowerId, version])
+}
+
+model ProposalApproval {
+  id         String         @id @default(cuid())
+  proposalId String
+  proposal   CreditProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  role       String
+  approver   String?
+  decision   String // PENDING | APPROVED | DECLINED
+  comment    String?
+  decidedAt  DateTime?
+}
+
+model ProfileScore {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  section    String // HISTORY | GROUP | OWNERSHIP | MANAGEMENT | BUYERS | SUPPLIERS | MARKET_POSITION
+  content    String?
+  /// 0–100 confidence (completeness + reliability).
+  score      Float
+  notes      String?
+
+  @@unique([borrowerId, section])
+}
+
+model Alert {
+  id         String    @id @default(cuid())
+  lenderId   String
+  lender     Lender    @relation(fields: [lenderId], references: [id], onDelete: Cascade)
+  borrowerId String?
+  borrower   Borrower? @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  type       String
+  severity   String
+  title      String
+  message    String
+  status     String    @default("OPEN") // OPEN | ACKNOWLEDGED | RESOLVED
+  actionNote String?
+  createdAt  DateTime  @default(now())
+
+  @@index([lenderId, status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  lenderId  String
+  lender    Lender   @relation(fields: [lenderId], references: [id], onDelete: Cascade)
+  actor     String
+  action    String
+  entity    String
+  entityId  String?
+  before    String?
+  after     String?
+  timestamp DateTime @default(now())
+
+  @@index([lenderId, timestamp])
+}
+
+// ---------------------------------------------------------------------------
+// PSX market data (shared reference data, not tenant-owned).
+// Populated by lib/psx/sync.ts from the PSX data portal (or seed for offline demos).
+
+model PsxSymbol {
+  symbol         String   @id
+  name           String
+  /// Normalised name for fuzzy matching (lib/psx/fuzzy.ts).
+  normalizedName String
+  sectorName     String?
+  isEtf          Boolean  @default(false)
+  isDebt         Boolean  @default(false)
+  /// DPS | SEED
+  source         String   @default("DPS")
+  active         Boolean  @default(true)
+  syncedAt       DateTime @default(now())
+
+  borrowers Borrower[]
+  prices    PsxPrice[]
+  snapshots PsxCompanySnapshot[]
+  links     ListingLink[]
+
+  @@index([normalizedName])
+}
+
+model PsxPrice {
+  symbol String
+  psx    PsxSymbol @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+  date   DateTime
+  close  Float
+  volume Float?
+  open   Float?
+
+  @@id([symbol, date])
+}
+
+/// Company page as fetched: profile, financial highlights (annual + quarterly), ratios, payouts.
+model PsxCompanySnapshot {
+  id          String    @id @default(cuid())
+  symbol      String
+  psx         PsxSymbol @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+  fetchedAt   DateTime  @default(now())
+  /// JSON: { profile, financials: { annual, quarterly }, ratios, announcements, payouts }
+  data        String
+  source      String    @default("DPS")
+
+  @@index([symbol, fetchedAt])
+}
+
+model PsxSyncRun {
+  id         String    @id @default(cuid())
+  kind       String // SYMBOLS | COMPANY | PRICES | ALL
+  symbol     String?
+  status     String // RUNNING | OK | FAILED
+  message    String?
+  counts     String? // JSON
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  actor      String?
+}
+
+/// Maker-checker link between a borrower and a PSX symbol. An RM proposes
+/// (from fuzzy search), an Analyst or CRO approves. Only an APPROVED link
+/// makes a borrower "listed" and switches its financials source to PSX.
+model ListingLink {
+  id           String    @id @default(cuid())
+  lenderId     String
+  borrowerId   String
+  borrower     Borrower  @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  symbol       String
+  psx          PsxSymbol @relation(fields: [symbol], references: [symbol])
+  matchScore   Float
+  matchType    String
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  requestedBy  String
+  /// User id of the maker; the checker must be a different user.
+  requestedById String?
+  requestedAt  DateTime  @default(now())
+  decidedBy    String?
+  decidedAt    DateTime?
+  decisionNote String?
+
+  @@index([lenderId, status])
+}
